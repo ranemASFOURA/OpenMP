@@ -29,7 +29,7 @@ int is_in_mandelbrot(double x, double y) {
 double mandelbrot_serial(int num_points) {
     int count = 0;  // Counter for points inside the Mandelbrot set
     for (int i = 0; i < num_points; i++) {
-        // Generate random points within the defined ranges
+        
         double x = (double)rand() / RAND_MAX * (R_MAX - R_MIN) + R_MIN;
         double y = (double)rand() / RAND_MAX * (I_MAX - I_MIN) + I_MIN;
         if (is_in_mandelbrot(x, y)) count++;
@@ -40,50 +40,48 @@ double mandelbrot_serial(int num_points) {
 
 // Function for the parallel version of Monte Carlo Mandelbrot area calculation using OpenMP
 double mandelbrot_parallel(int num_points, int num_threads) {
-    int count = 0;  // Counter for points inside the Mandelbrot set
-    omp_set_num_threads(num_threads);  // Set the number of threads
-    #pragma omp parallel  // Start a parallel region
+    int count = 0;
+    omp_set_num_threads(num_threads);
+    #pragma omp parallel
     {
-        int local_count = 0;  // Local counter for each thread
-        #pragma omp for  // Parallelize the loop
+        int local_count = 0;
+        unsigned int seed = omp_get_thread_num();
+        #pragma omp for
         for (int i = 0; i < num_points; i++) {
-            // Generate random points within the defined ranges
-            double x = (double)rand() / RAND_MAX * (R_MAX - R_MIN) + R_MIN;
-            double y = (double)rand() / RAND_MAX * (I_MAX - I_MIN) + I_MIN;
+            double x = (double)rand_r(&seed) / RAND_MAX * (R_MAX - R_MIN) + R_MIN;
+            double y = (double)rand_r(&seed) / RAND_MAX * (I_MAX - I_MIN) + I_MIN;
             if (is_in_mandelbrot(x, y)) local_count++;
         }
-        #pragma omp atomic  // Ensure safe update of the global counter
+        #pragma omp atomic
         count += local_count;
     }
-    // Return the area approximation
     return (R_MAX - R_MIN) * (I_MAX - I_MIN) * ((double)count / num_points);
 }
 
 int main() {
-    // Variables for measuring execution time
+    int num_points = NUM_POINTS;
+    int thread_counts[] = {2, 4, 8, 16, 32};  
+    int num_threads_count = sizeof(thread_counts) / sizeof(thread_counts[0]);
     double start, end;
-    int num_threads;
-
-    // Prompt the user to enter the number of threads
-    printf("Enter the number of threads: ");
-    if (scanf("%d", &num_threads) != 1) {
-        fprintf(stderr, "Error reading the number of threads.\n");
-        return 1;  // Exit with an error code
-    }
 
     // Measure and print the execution time for the serial version
     start = omp_get_wtime();
-    double area_serial = mandelbrot_serial(NUM_POINTS);
+    double area_serial = mandelbrot_serial(num_points);
     end = omp_get_wtime();
     printf("Serial Mandelbrot area: %f\n", area_serial);
     printf("Time (serial): %f seconds\n", end - start);
 
-    // Measure and print the execution time for the parallel version
-    start = omp_get_wtime();
-    double area_parallel = mandelbrot_parallel(NUM_POINTS, num_threads);
-    end = omp_get_wtime();
-    printf("Parallel Mandelbrot area: %f\n", area_parallel);
-    printf("Time (parallel with %d threads): %f seconds\n", num_threads, end - start);
+    // Loop through different thread counts and measure execution time
+    for (int i = 0; i < num_threads_count; i++) {
+        int num_threads = thread_counts[i];
+        
+        start = omp_get_wtime();
+        double area_parallel = mandelbrot_parallel(num_points, num_threads);
+        end = omp_get_wtime();
+        
+        printf("Parallel Mandelbrot area with %d threads: %f\n", num_threads, area_parallel);
+        printf("Time (parallel with %d threads): %f seconds\n", num_threads, end - start);
+    }
 
     return 0;
 }
